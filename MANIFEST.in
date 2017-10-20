@@ -1,0 +1,7 @@
+include LICENSE
+include MANIFEST.in
+recursive-exclude docs *
+recursive-exclude tests *
+recursive-include retasks *
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
