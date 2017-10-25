@@ -75,7 +75,9 @@ class WorkerSupervisor(object):
 
     def check_workers(self):
         for worker, process in self.workers_processes:
-            if not process.is_alive():
+            if process.is_alive():
+                self.broker.check_worker(process.pid)
+            else:
                 self.broker.terminate_worker(process.pid)
                 logger.debug("Worker process terminated: id={}".format(process.pid))
                 self.workers_processes.remove((worker, process))
@@ -90,8 +92,6 @@ class WorkerSupervisor(object):
         logger.debug("Worker supervisor started: application={self.application_path} broker_class={self.broker_cls}".format(self=self))
 
         self.broker = self.broker_cls()
-
-        #TODO terminate all zombie workers / notify broker about termination
 
         while True:
             workers_processes_fill = self.workers_num - len(self.workers_processes)
@@ -122,26 +122,28 @@ class Worker(object):
         except Exception as exception:
             return exception
 
-    def receive_signal(self, signum, stack):
+    def receive_hup_or_term_signal(self, signum, stack):
         logger.info(u'Worker {} received signal: {}'.format(self.id, signum))
         self.running = False
 
+    def receive_int_or_quit_signal(self, signum, stack):
+        logger.info(u'Worker {} received signal: {}'.format(self.id, signum))
+        sys.exit(1)
+
     def start(self):
-        signal.signal(signal.SIGHUP, self.receive_signal)
-        signal.signal(signal.SIGTERM, self.receive_signal)
-        signal.signal(signal.SIGINT, self.receive_signal)
-        signal.signal(signal.SIGQUIT, self.receive_signal)
+        signal.signal(signal.SIGHUP, self.receive_hup_or_term_signal)
+        signal.signal(signal.SIGTERM, self.receive_hup_or_term_signal)
+        signal.signal(signal.SIGINT, self.receive_int_or_quit_signal)
+        signal.signal(signal.SIGQUIT, self.receive_int_or_quit_signal)
 
         self.id = os.getpid()
         logger.debug("Worker started: id={self.id} application={self.application_path} broker_class={self.broker.__class__.__name__}".format(self=self))
 
         import_module(self.application_path)
 
-        #TODO
-        # write to file pid for notifiing supervisor during start
-
         while self.running:
             task_pack = self.broker.pull_task(self.id)
+
             if not task_pack:
                 sleep(0.1)
                 continue
@@ -150,5 +152,3 @@ class Worker(object):
             task_result = self.run_task(task, task_args, task_kwargs)
             self.broker.finish_task(self.id)
             logger.debug('task_result {}'.format(task_result))
-
-        # TODO delete file pid

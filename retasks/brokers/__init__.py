@@ -8,5 +8,8 @@ class Broker(object):
     def finish_task(self, worker_id):
         raise NotImplementedError()
 
+    def check_worker(self, worker_id):
+        raise NotImplementedError()
+
     def terminate_worker(self, worker_id):
         raise NotImplementedError()
